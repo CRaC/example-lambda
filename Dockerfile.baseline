@@ -1,0 +1,20 @@
+FROM ubuntu:18.04
+
+COPY jdk /jdk
+
+# Copy function code and runtime dependencies from Maven layout
+COPY target/classes /function
+COPY target/dependency/* /function/lib/
+
+WORKDIR /function
+
+ENV AWS_XRAY_CONTEXT_MISSING=LOG_ERROR
+
+ENTRYPOINT [ "/jdk/bin/java", \
+	"-XX:-UsePerfData", \
+	"-cp", "/function:/function/lib/*", \
+	"com.amazonaws.services.lambda.runtime.api.client.AWSLambda" ]
+
+# Set the CMD to your handler (could also be done as a parameter override outside of the Dockerfile)
+CMD [ "example.Handler::handleRequest" ]
+

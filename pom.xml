@@ -13,6 +13,16 @@
   </properties>
   <dependencies>
     <dependency>
+      <groupId>io.github.crac</groupId>
+      <artifactId>org-crac</artifactId>
+      <version>0.1.0</version>
+    </dependency>
+    <dependency>
+      <groupId>io.github.crac.com.amazonaws</groupId>
+      <artifactId>aws-lambda-java-runtime-interface-client</artifactId>
+      <version>1.0.0</version>
+    </dependency>
+    <dependency>
       <groupId>com.amazonaws</groupId>
       <artifactId>aws-lambda-java-core</artifactId>
       <version>1.2.1</version>
@@ -52,6 +62,7 @@
       <artifactId>lambda</artifactId>
       <version>2.10.72</version>
     </dependency>
+<!-- XRay is not supported now
     <dependency>
       <groupId>com.amazonaws</groupId>
       <artifactId>aws-xray-recorder-sdk-core</artifactId>
@@ -72,6 +83,7 @@
       <artifactId>aws-xray-recorder-sdk-aws-sdk-v2-instrumentor</artifactId>
       <version>2.4.0</version>
     </dependency>
+-->
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-api</artifactId>
@@ -130,6 +142,23 @@
            <source>1.8</source>
            <target>1.8</target>
         </configuration>
+      </plugin>
+      <plugin>
+       <groupId>org.apache.maven.plugins</groupId>
+       <artifactId>maven-dependency-plugin</artifactId>
+       <version>3.1.2</version>
+       <executions>
+         <execution>
+           <id>copy-dependencies</id>
+           <phase>package</phase>
+           <goals>
+             <goal>copy-dependencies</goal>
+           </goals>
+           <configuration>
+             <!-- configure the plugin here -->
+           </configuration>
+         </execution>
+       </executions>
       </plugin>
     </plugins>
   </build>
