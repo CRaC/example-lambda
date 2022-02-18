@@ -1,5 +1,13 @@
 #!/bin/bash
 
+IOLIM=60m
+DEV=/dev/nvme0n1
+CPU=0.88
+
+  dev() {   DEV=$1; }
+iolim() { IOLIM=$1; }
+  cpu() {   CPU=$1; }
+
 s00_init() {
 
 	if [ -z $JAVA_HOME ]; then
@@ -56,8 +64,42 @@ s03_checkpoint() {
 }
 
 s04_prepare_restore() {
-	rm -f cr/dump4.log # XXX
+	sudo rm -f cr/dump4.log # XXX
 	docker build -t crac-lambda-restore -f Dockerfile.restore .
 }
 
-"$@"
+dropcache() {
+        sync
+        echo 3 | sudo tee /proc/sys/vm/drop_caches > /dev/null
+}
+
+local_test() {
+	docker run \
+		--rm \
+		--name crac-test \
+		-v $PWD/aws-lambda-rie:/aws-lambda-rie \
+		-p 8080:8080 \
+		--device-read-bps $DEV:$IOLIM \
+		--device-write-bps $DEV:$IOLIM \
+		--cpus $CPU \
+		--entrypoint '' \
+		"$@"
+}
+
+s05_local_restore() {
+	local_test crac-lambda-restore \
+		/aws-lambda-rie /bin/bash /restore.cmd.sh
+}
+
+local_baseline() {
+	local_test crac-lambda-baseline \
+		/aws-lambda-rie /jdk/bin/java \
+			-XX:-UsePerfData \
+			-cp /function:/function/lib/* \
+			com.amazonaws.services.lambda.runtime.api.client.AWSLambda \
+			example.Handler::handleRequest
+}
+
+for i; do
+	$i || break
+done
