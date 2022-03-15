@@ -1,5 +1,7 @@
 #!/bin/bash
 
+CONTAINERNAME=crac
+
 IOLIM=60m
 DEV=/dev/nvme0n1
 CPU=0.88
@@ -98,6 +100,59 @@ local_baseline() {
 			-cp /function:/function/lib/* \
 			com.amazonaws.services.lambda.runtime.api.client.AWSLambda \
 			example.Handler::handleRequest
+}
+
+s06_init_aws() {
+	ACCOUNT=$(aws sts get-caller-identity | jq -r '.Account')
+	echo export ACCOUNT=$ACCOUNT
+	REGION=$(aws configure get region)
+	echo export REGION=$REGION
+	ECR=$ACCOUNT.dkr.ecr.$REGION.amazonaws.com
+	echo export ECR=$ECR
+	REMOTEIMG=$ECR/crac-test
+	echo export REMOTEIMG=$REMOTEIMG
+	aws ecr get-login-password | docker login --username AWS --password-stdin $ECR 1>&2
+}
+
+s07_deploy_aws() {
+        docker tag crac-lambda-restore $REMOTEIMG
+        docker push $REMOTEIMG
+}
+
+init_lambda() {
+	if ! [ $LAMBDANAME ]; then
+		echo "Provide LAMBDANAME= preconfigured by a container image: \
+https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-images.html#gettingstarted-images-function" >&2
+		exit 1
+	fi
+}
+
+update_lambda() {
+        local digest=$(docker inspect -f '{{ index .RepoDigests 0 }}' $REMOTEIMG)
+        aws lambda update-function-code --function-name $LAMBDANAME --image $digest
+        aws lambda wait function-updated --function-name $LAMBDANAME
+}
+
+s08_invoke_lambda() {
+	rm -f response.json log.json
+
+	aws lambda invoke  \
+		--cli-binary-format raw-in-base64-out \
+		--function-name $LAMBDANAME \
+		--payload "$(< event.json) " \
+		--log-type Tail \
+		response.json \
+		> log.json
+
+	jq . < response.json 
+	jq -r .LogResult < log.json | base64 -d
+}
+
+coldstart_lambda() {
+	local mem=$(aws lambda get-function-configuration --function-name $LAMBDANAME | jq -r '.MemorySize')
+	local min=256
+	local max=512
+	aws lambda update-function-configuration --function-name $LAMBDANAME --memory-size $(($min + (($mem + 1) % ($max - $min))))
 }
 
 for i; do
