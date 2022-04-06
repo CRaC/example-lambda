@@ -1,4 +1,6 @@
+/jdk
 /target
 /aws-lambda-rie
-/jdk
 /cr
+/log.json
+/response.json

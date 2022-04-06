@@ -1,6 +1,9 @@
 #!/bin/bash
 
-CONTAINERNAME=crac
+LAMBDA_NAME=crac-test
+LAMBDA_IMAGE=crac-test
+
+CRAC_VERSION=17-crac+2
 
 IOLIM=60m
 DEV=/dev/nvme0n1
@@ -10,26 +13,26 @@ CPU=0.88
 iolim() { IOLIM=$1; }
   cpu() {   CPU=$1; }
 
-s00_init() {
-
-	if [ -z $JAVA_HOME ]; then
-	       echo "No	JAVA_HOME specified"
-	       return 1
-	fi
-
+dojlink() {
+	local JDK=$1
 	rm -rf jdk
-	cp -r $JAVA_HOME jdk
+	$JDK/bin/jlink --bind-services --output jdk --module-path $JDK/jmods --add-modules java.base,jdk.unsupported,java.sql
+	# XXX
+	cp $JDK/lib/criu jdk/lib/
+}
 
-	curl -L -o aws-lambda-rie https://github.com/aws/aws-lambda-runtime-interface-emulator/releases/download/v1.3/aws-lambda-rie-$(uname -m) 
+s00_init() {
+	curl -LO https://github.com/CRaC/openjdk-builds/releases/download/$CRAC_VERSION/jdk$CRAC_VERSION.tar.gz
+	tar axf jdk$CRAC_VERSION.tar.gz
+	dojlink jdk$CRAC_VERSION
+
+	curl -L -o aws-lambda-rie https://github.com/aws/aws-lambda-runtime-interface-emulator/releases/download/v1.3/aws-lambda-rie-$(uname -m)
 	chmod +x aws-lambda-rie
 }
 
-dojlink() {
-	$JAVA_HOME/bin/jlink --bind-services --output jdk --module-path $JAVA_HOME/jmods --add-modules java.base,jdk.unsupported,java.sql
-}
 
 s01_build() {
-	mvn compile dependency:copy-dependencies -DincludeScope=runtime
+	mvn clean compile dependency:copy-dependencies -DincludeScope=runtime
 	docker build -t crac-lambda-checkpoint -f Dockerfile.checkpoint .
 }
 
@@ -70,7 +73,7 @@ s04_prepare_restore() {
 	docker build -t crac-lambda-restore -f Dockerfile.restore .
 }
 
-dropcache() {
+make_cold_local() {
         sync
         echo 3 | sudo tee /proc/sys/vm/drop_caches > /dev/null
 }
@@ -85,11 +88,13 @@ local_test() {
 		--device-write-bps $DEV:$IOLIM \
 		--cpus $CPU \
 		--entrypoint '' \
+		--security-opt seccomp=$PWD/seccomp.json \
 		"$@"
 }
 
 s05_local_restore() {
-	local_test crac-lambda-restore \
+	local_test \
+		crac-lambda-restore \
 		/aws-lambda-rie /bin/bash /restore.cmd.sh
 }
 
@@ -102,6 +107,14 @@ local_baseline() {
 			example.Handler::handleRequest
 }
 
+ltest() {
+	local_test \
+		-v /home:/home \
+		-v $PWD/logdir:/tmp/log \
+		crac-lambda-restore \
+		/bin/bash $PWD/restore.cmd.sh
+}
+
 s06_init_aws() {
 	ACCOUNT=$(aws sts get-caller-identity | jq -r '.Account')
 	echo export ACCOUNT=$ACCOUNT
@@ -109,7 +122,7 @@ s06_init_aws() {
 	echo export REGION=$REGION
 	ECR=$ACCOUNT.dkr.ecr.$REGION.amazonaws.com
 	echo export ECR=$ECR
-	REMOTEIMG=$ECR/crac-test
+	REMOTEIMG=$ECR/$LAMBDA_IMAGE
 	echo export REMOTEIMG=$REMOTEIMG
 	aws ecr get-login-password | docker login --username AWS --password-stdin $ECR 1>&2
 }
@@ -117,28 +130,18 @@ s06_init_aws() {
 s07_deploy_aws() {
         docker tag crac-lambda-restore $REMOTEIMG
         docker push $REMOTEIMG
-}
 
-init_lambda() {
-	if ! [ $LAMBDANAME ]; then
-		echo "Provide LAMBDANAME= preconfigured by a container image: \
-https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-images.html#gettingstarted-images-function" >&2
-		exit 1
-	fi
-}
-
-update_lambda() {
         local digest=$(docker inspect -f '{{ index .RepoDigests 0 }}' $REMOTEIMG)
-        aws lambda update-function-code --function-name $LAMBDANAME --image $digest
-        aws lambda wait function-updated --function-name $LAMBDANAME
+        aws lambda update-function-code --function-name $LAMBDA_NAME --image $digest
+        aws lambda wait function-updated --function-name $LAMBDA_NAME
 }
 
-s08_invoke_lambda() {
+s08_invoke_aws() {
 	rm -f response.json log.json
 
 	aws lambda invoke  \
 		--cli-binary-format raw-in-base64-out \
-		--function-name $LAMBDANAME \
+		--function-name $LAMBDA_NAME \
 		--payload "$(< event.json) " \
 		--log-type Tail \
 		response.json \
@@ -148,11 +151,12 @@ s08_invoke_lambda() {
 	jq -r .LogResult < log.json | base64 -d
 }
 
-coldstart_lambda() {
-	local mem=$(aws lambda get-function-configuration --function-name $LAMBDANAME | jq -r '.MemorySize')
+make_cold_aws() {
+	local mem=$(aws lambda get-function-configuration --function-name $LAMBDA_NAME | jq -r '.MemorySize')
 	local min=256
 	local max=512
-	aws lambda update-function-configuration --function-name $LAMBDANAME --memory-size $(($min + (($mem + 1) % ($max - $min))))
+	aws lambda update-function-configuration --function-name $LAMBDA_NAME --memory-size $(($min + (($mem + 1) % ($max - $min))))
+	aws lambda wait function-updated --function-name $LAMBDA_NAME
 }
 
 for i; do

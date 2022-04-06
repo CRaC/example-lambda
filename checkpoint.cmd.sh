@@ -12,4 +12,5 @@ exec /aws-lambda-rie /bin/bash -c '\
 		-XX:CRaCCheckpointTo=/cr \
 		-cp /function:/function/lib/* \
 		-Dcom.amazonaws.services.lambda.runtime.api.client.NativeClient.libsBase=/function/lib/ \
+		--add-opens java.base/java.util=ALL-UNNAMED \
 		com.amazonaws.services.lambda.runtime.api.client.AWSLambda $0' "$@"

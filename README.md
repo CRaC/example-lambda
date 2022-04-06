@@ -1,96 +1,137 @@
-# Blank function (Java)
+# AWS Lambda on Java with CRaC
 
-![Architecture](/sample-apps/blank-java/images/sample-blank-java.png)
+This is an example of a Java AWS Lambda that uses Project CRaC to reduce the cost and time of the first function invocation.
 
-The project source includes function code and supporting resources:
+Based on https://github.com/awsdocs/aws-lambda-developer-guide/tree/main/sample-apps/blank-java.
 
-- `src/main` - A Java function.
-- `src/test` - A unit test and helper classes.
-- `template.yml` - An AWS CloudFormation template that creates an application.
-- `build.gradle` - A Gradle build file.
-- `pom.xml` - A Maven build file.
-- `1-create-bucket.sh`, `2-build-layer.sh`, etc. - Shell scripts that use the AWS CLI to deploy and manage the application.
+In this example the function will be packed as the [container image](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-images.html#gettingstarted-images-package) together with JDK CRaC runtime and the CRaC image.
 
-Use the following instructions to deploy the sample application.
+The CRaC image with the snapshot of JVM and application states will be preparied with the help of [AWS Runtime Interface Emulator](https://github.com/aws/aws-lambda-runtime-interface-emulator).
 
-# Requirements
-- [Java 8 runtime environment (SE JRE)](https://www.oracle.com/java/technologies/javase-downloads.html)
-- [Gradle 5](https://gradle.org/releases/) or [Maven 3](https://maven.apache.org/docs/history.html)
-- The Bash shell. For Linux and macOS, this is included by default. In Windows 10, you can install the [Windows Subsystem for Linux](https://docs.microsoft.com/en-us/windows/wsl/install-win10) to get a Windows-integrated version of Ubuntu and Bash.
-- [The AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html) v1.17 or newer.
+The deployment scheme will be:
+* Create the container image with the function
+* Create the CRaC image:
+  * Run the function in the local environment
+  * Optionally, warm-up the function
+  * Trigger checkpoint to dump the image
+* Create the container image with the function and the image
+* Deploy the container to AWS
 
-If you use the AWS CLI v2, add the following to your [configuration file](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html) (`~/.aws/config`):
+![Deployment](./deployment.png)
+
+* [Instruction](#instruction)
+  * [Build](#build)
+  * [Checkpoint](#checkpoint)
+  * [Deploy](#deploy)
+    * [Test locally](#test-locally)
+    * [Deploy to AWS](#deploy-to-aws)
+* [Techical details](#techical-details)
+
+## Instruction
+
+The repo contain a helper script to perform routine operations.
+Its intended to be "executable documetnation", so the reader is invited to look to the script
+
+The step zero fetches necessary dependencies:
 
 ```
-cli_binary_format=raw-in-base64-out
+./crac-steps.sh s00_init
 ```
 
-This setting enables the AWS CLI v2 to load JSON events from a file, matching the v1 behavior.
+### Build
 
-# Setup
-Download or clone this repository.
+The function needs to use a fork of [AWS Lambda Java Libraries](https://github.com/CRaC/aws-lambda-java-libs), `pom.xml` was changed to:
 
-    $ git clone https://github.com/awsdocs/aws-lambda-developer-guide.git
-    $ cd aws-lambda-developer-guide/sample-apps/blank-java
+```
+    <dependency>
+      <groupId>io.github.crac.com.amazonaws</groupId>
+      <artifactId>aws-lambda-java-runtime-interface-client</artifactId>
+      <version>1.0.0</version>
+    </dependency>
+```
 
-To create a new bucket for deployment artifacts, run `1-create-bucket.sh`.
+Build the app and create the container image for checkpoint (`crac-lambda-checkpoint`):
+```
+./crac-steps.sh s01_build
+```
 
-    blank-java$ ./1-create-bucket.sh
-    make_bucket: lambda-artifacts-a5e491dbb5b22e0d
+### Checkpoint
 
-To build a Lambda layer that contains the function's runtime dependencies, run `2-build-layer.sh`. Packaging dependencies in a layer reduces the size of the deployment package that you upload when you modify your code.
+Run the container for checkpoint on the local machine:
 
-    blank-java$ ./2-build-layer.sh
+```
+./crac-steps.sh s02_start_checkpoint
+```
 
-# Deploy
+At this point you may provide a workload to warm-up your function, served on port `8080`.
 
-To deploy the application, run `3-deploy.sh`.
+Then trigger checkpoint from another terminal:
+```
+./crac-steps.sh s03_checkpoint
+```
 
-    blank-java$ ./3-deploy.sh
-    BUILD SUCCESSFUL in 1s
-    Successfully packaged artifacts and wrote output template to file out.yml.
-    Waiting for changeset to be created..
-    Successfully created/updated stack - blank-java
+The former function process should exit, leaving the CRaC image in the `cr` directory.
 
-This script uses AWS CloudFormation to deploy the Lambda functions and an IAM role. If the AWS CloudFormation stack that contains the resources already exists, the script updates it with any changes to the template or function code.
+Create the final container image with the CRaC image (`crac-lambda-restore`):
 
-You can also build the application with Maven. To use maven, add `mvn` to the command.
+```
+./crac-steps.sh s04_prepare_restore
+```
 
-    java-basic$ ./3-deploy.sh mvn
-    [INFO] Scanning for projects...
-    [INFO] -----------------------< com.example:blank-java >-----------------------
-    [INFO] Building blank-java-function 1.0-SNAPSHOT
-    [INFO] --------------------------------[ jar ]---------------------------------
-    ...
+### Deploy
 
-# Test
-To invoke the function, run `4-invoke.sh`.
+Now you can deploy `crac-lambda-restore` as the container function to the AWS.
 
-    blank-java$ ./4-invoke.sh
-    {
-        "StatusCode": 200,
-        "ExecutedVersion": "$LATEST"
-    }
+You may also check the function locally with RIE.
 
-Let the script invoke the function a few times and then press `CRTL+C` to exit.
+#### Test locally
 
-The application uses AWS X-Ray to trace requests. Open the [X-Ray console](https://console.aws.amazon.com/xray/home#/service-map) to view the service map.
+You can also test the container locally:
 
-![Service Map](/sample-apps/blank-java/images/blank-java-servicemap.png)
+```
+./crac-steps.sh s05_local_restore
+```
 
-Choose a node in the main function graph. Then choose **View traces** to see a list of traces. Choose any trace to view a timeline that breaks down the work done by the function.
+From another terminal:
+```
+./crac-steps.sh "post hi"
+```
 
-![Trace](/sample-apps/blank-java/images/blank-java-trace.png)
+To test cold start, drop file system caches by:
+```
+./crac-steps.sh make_cold_local
+```
 
-Finally, view the application in the Lambda console.
+#### Deploy to AWS
 
-*To view the application*
-1. Open the [applications page](https://console.aws.amazon.com/lambda/home#/applications) in the Lambda console.
-2. Choose **blank-java**.
+The helper script can deploy the container, assuming there is a function named `crac-test` configured to use image `crac-test`.
 
-  ![Application](/sample-apps/blank-java/images/blank-java-application.png)
+Initialize the evironment:
+```
+eval $(./crac-steps.sh s06_init_aws)
+```
 
-# Cleanup
-To delete the application, run `5-cleanup.sh`.
+Push the container and update the function:
+```
+./crac-steps.sh s07_deploy_aws
+```
 
-    blank$ ./5-cleanup.sh
+To test cold start, reconfigure the function by:
+```
+./crac-steps.sh make_cold_aws
+```
+
+## Techical details
+
+AWS environment restricts features and capabilities for functions in containers:
+* the file system is read-only, except `/tmp`
+* setting PID/TIDs for being restored process, `ptrace`, and some other syscalls that are usually required by CRIU are not allowed
+* storage performance is not great
+
+To overcome storage limits we unpack libjvm.so to /tmp at the start of the container.
+Same is done for CRaC image after it's added to the container image.
+
+CRaC's build of CRIU attempts to set the PID/TIDs on restore first, in case this functionality is presented.
+When this fails in AWS, it attempts to align the next PID by creating empty do-nothing processes/threads. 
+As in the vanilla CRIU, there is strict requirement for PID/TIDs to be available.
+To ensure Java PID/TIDs won't intersect with another processes on restore, checkpoint script ensures Java PID/TIDs are created with a reasonable offset, see [the script](./checkpoint.cmd.sh#L8).
