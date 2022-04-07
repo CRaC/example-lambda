@@ -101,10 +101,12 @@ s05_local_restore() {
 }
 
 local_baseline() {
-	local_test crac-lambda-baseline \
+	local_test crac-lambda-checkpoint \
 		/aws-lambda-rie /jdk/bin/java \
 			-XX:-UsePerfData \
 			-cp /function:/function/lib/* \
+			-Dcom.amazonaws.services.lambda.runtime.api.client.NativeClient.libsBase=/function/lib/ \
+			--add-opens java.base/java.util=ALL-UNNAMED \
 			com.amazonaws.services.lambda.runtime.api.client.AWSLambda \
 			example.Handler::handleRequest
 }
