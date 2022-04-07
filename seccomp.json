@@ -864,7 +864,7 @@
 		},
 		{
 			"name": "prctl",
-			"action": "SCMP_ACT_ERRNO",
+			"action": "SCMP_ACT_ALLOW",
 			"args": []
 		},
 		{
