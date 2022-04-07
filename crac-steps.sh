@@ -3,8 +3,6 @@
 LAMBDA_NAME=crac-test
 LAMBDA_IMAGE=crac-test
 
-CRAC_VERSION=17-crac+2
-
 IOLIM=60m
 DEV=/dev/nvme0n1
 CPU=0.88
@@ -22,14 +20,18 @@ dojlink() {
 }
 
 s00_init() {
-	curl -LO https://github.com/CRaC/openjdk-builds/releases/download/$CRAC_VERSION/jdk$CRAC_VERSION.tar.gz
-	tar axf jdk$CRAC_VERSION.tar.gz
-	dojlink jdk$CRAC_VERSION
-
 	curl -L -o aws-lambda-rie https://github.com/aws/aws-lambda-runtime-interface-emulator/releases/download/v1.3/aws-lambda-rie-$(uname -m)
 	chmod +x aws-lambda-rie
-}
 
+	echo
+	echo "Take the latest build of openjdk/crac and run: "$0" dojlink ./path/to/crac/jdk"
+	echo "https://github.com/CRaC/openjdk-builds/actions/workflows/release.yml"
+
+	#CRAC_VERSION=17-crac+2
+	#curl -LO https://github.com/CRaC/openjdk-builds/releases/download/$CRAC_VERSION/jdk$CRAC_VERSION.tar.gz
+	#tar axf jdk$CRAC_VERSION.tar.gz
+	#dojlink jdk$CRAC_VERSION
+}
 
 s01_build() {
 	mvn clean compile dependency:copy-dependencies -DincludeScope=runtime
@@ -159,6 +161,10 @@ make_cold_aws() {
 	aws lambda wait function-updated --function-name $LAMBDA_NAME
 }
 
-for i; do
-	$i || break
-done
+steps() {
+	for i; do
+		$i || break
+	done
+}
+
+"$@"

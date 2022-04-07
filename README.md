@@ -94,7 +94,7 @@ You can also test the container locally:
 
 From another terminal:
 ```
-./crac-steps.sh "post hi"
+./crac-steps.sh post hi
 ```
 
 To test cold start, drop file system caches by:
