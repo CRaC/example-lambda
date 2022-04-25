@@ -38,6 +38,12 @@ The step zero fetches necessary dependencies:
 ./crac-steps.sh s00_init
 ```
 
+It will be required to download the latest development build of OpenJDK CRaC from https://github.com/CRaC/openjdk-builds/actions/workflows/release.yml. Then run:
+
+```
+./crac-steps.sh dojlink ./path/to/the/extracted/crac/jdk
+```
+
 ### Build
 
 The function needs to use a fork of [AWS Lambda Java Libraries](https://github.com/CRaC/aws-lambda-java-libs), `pom.xml` was changed to:
