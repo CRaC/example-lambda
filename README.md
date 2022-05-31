@@ -30,7 +30,7 @@ The deployment scheme will be:
 ## Instruction
 
 The repo contain a helper script to perform routine operations.
-Its intended to be "executable documetnation", so the reader is invited to look to the script
+It is intended to be "executable documentation", so the reader is invited to look to the script
 
 The step zero fetches necessary dependencies:
 
