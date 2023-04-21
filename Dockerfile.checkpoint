@@ -1,34 +1,12 @@
 FROM ubuntu:18.04 as builder
 
-RUN apt update && \
-	DEBIAN_FRONTEND=noninteractive apt -y --no-install-recommends install liblz4-tool && \
-	apt clean && \
-	rm -rf /var/lib/apt /var/cache/apt
-
 COPY jdk /jdk
-
-RUN LIBJVM=/jdk/lib/server/libjvm.so; \
-	       lz4 -f -z -9 $LIBJVM $LIBJVM.lz4; \
-	       rm -f $LIBJVM; \
-	       ln -s /tmp/sub/$LIBJVM $LIBJVM
-
-
-FROM ubuntu:18.04
-
-RUN apt update && \
-	DEBIAN_FRONTEND=noninteractive apt -y --no-install-recommends install liblz4-tool && \
-	apt clean && \
-	rm -rf /var/lib/apt /var/cache/apt
-
-COPY --from=builder /jdk /jdk
-COPY prepare-jdk.cmd.sh /
 
 # Copy function code and runtime dependencies from Maven layout
 COPY target/classes /function
 COPY target/dependency/* /function/lib/
 
-RUN /prepare-jdk.cmd.sh ; \
-	cd /function/lib; /jdk/bin/jar -x -f aws-lambda-java-runtime-interface-client*.jar \
+RUN cd /function/lib; /jdk/bin/jar -x -f aws-lambda-java-runtime-interface-client*.jar \
 		aws-lambda-runtime-interface-client.musl.so \
 		aws-lambda-runtime-interface-client.glibc.so
 

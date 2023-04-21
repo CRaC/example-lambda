@@ -97,7 +97,7 @@ local_test() {
 s05_local_restore() {
 	local_test \
 		crac-lambda-restore \
-		/aws-lambda-rie /bin/bash /restore.cmd.sh
+		/aws-lambda-rie /jdk/bin/java -XX:CRaCRestoreFrom=/cr
 }
 
 local_baseline() {
@@ -116,7 +116,7 @@ ltest() {
 		-v /home:/home \
 		-v $PWD/logdir:/tmp/log \
 		crac-lambda-restore \
-		/bin/bash $PWD/restore.cmd.sh
+		$PWD/jdk/bin/java -XX:CRaCRestoreFrom=$PWD/cr
 }
 
 s06_init_aws() {

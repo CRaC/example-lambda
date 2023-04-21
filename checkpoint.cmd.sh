@@ -1,11 +1,10 @@
 #!/bin/bash
 
-/prepare-jdk.cmd.sh
-
 # Ensure small PID, for privileged-less criu to be able to restore PID by bumping.
 # But not too small, to avoid clashes with other occasional processes on restore.
 exec /aws-lambda-rie /bin/bash -c '\
 	while [ 128 -ge $(cat /proc/sys/kernel/ns_last_pid) ]; do :; done; \
+	CRAC_CRIU_OPTS="--compress" \
 	setsid /jdk/bin/java \
 		-Xshare:off \
 		-XX:-UsePerfData \
