@@ -14,7 +14,7 @@ iolim() { IOLIM=$1; }
 dojlink() {
 	local JDK=$1
 	rm -rf jdk
-	$JDK/bin/jlink --bind-services --output jdk --module-path $JDK/jmods --add-modules java.base,jdk.unsupported,java.sql
+	$JDK/bin/jlink --bind-services --output jdk --module-path $JDK/jmods --add-modules java.base,jdk.unsupported,java.sql #,jdk.crac
 	# XXX
 	cp $JDK/lib/criu jdk/lib/
 }
