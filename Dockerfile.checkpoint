@@ -7,13 +7,16 @@ COPY target/classes /function
 COPY target/dependency/* /function/lib/
 
 RUN cd /function/lib; /jdk/bin/jar -x -f aws-lambda-java-runtime-interface-client*.jar \
-		aws-lambda-runtime-interface-client.musl.so \
-		aws-lambda-runtime-interface-client.glibc.so
+	jni/libaws-lambda-jni.linux_musl-x86_64.so \
+	jni/libaws-lambda-jni.linux-x86_64.so \
+	jni/libaws-lambda-jni.linux-aarch_64.so \
+	jni/libaws-lambda-jni.linux_musl-aarch_64.so
 
 WORKDIR /function
 
 ENV AWS_XRAY_CONTEXT_MISSING=LOG_ERROR
 
+COPY TryLoad.java /usr/local/lib/
 COPY checkpoint.cmd.sh /
 ENTRYPOINT [ "/bin/bash", "/checkpoint.cmd.sh" ]
 
