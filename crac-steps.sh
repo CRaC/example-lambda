@@ -14,7 +14,9 @@ iolim() { IOLIM=$1; }
 dojlink() {
 	local JDK=$1
 	rm -rf jdk
-	$JDK/bin/jlink --bind-services --output jdk --module-path $JDK/jmods --add-modules java.base,jdk.unsupported,java.sql
+	MODS=java.base,jdk.unsupported,java.sql
+	[ -f $JDK/jmods/jdk.crac.jmod ] && MODS+=",jdk.crac"
+	$JDK/bin/jlink --bind-services --output jdk --module-path $JDK/jmods --add-modules $MODS
 	# XXX
 	cp $JDK/lib/criu jdk/lib/
 }
@@ -40,9 +42,11 @@ s01_build() {
 
 s02_start_checkpoint() {
 	docker run \
+		--ulimit nofile=1024 \
 		--privileged \
 		--rm \
 		--name crac-checkpoint \
+		-m 512m \
 		-v $PWD/aws-lambda-rie:/aws-lambda-rie \
 		-v $PWD/cr:/cr \
 		-p 8080:8080 \
@@ -97,11 +101,11 @@ local_test() {
 s05_local_restore() {
 	local_test \
 		crac-lambda-restore \
-		/aws-lambda-rie /bin/bash /restore.cmd.sh
+		/aws-lambda-rie /jdk/bin/java -XX:CRaCRestoreFrom=/cr
 }
 
 local_baseline() {
-	local_test crac-lambda-checkpoint \
+	local_test ${1:-crac-lambda-checkpoint} \
 		/aws-lambda-rie /jdk/bin/java \
 			-XX:-UsePerfData \
 			-cp /function:/function/lib/* \
@@ -116,7 +120,7 @@ ltest() {
 		-v /home:/home \
 		-v $PWD/logdir:/tmp/log \
 		crac-lambda-restore \
-		/bin/bash $PWD/restore.cmd.sh
+		$PWD/jdk/bin/java -XX:CRaCRestoreFrom=$PWD/cr
 }
 
 s06_init_aws() {
@@ -132,7 +136,7 @@ s06_init_aws() {
 }
 
 s07_deploy_aws() {
-        docker tag crac-lambda-restore $REMOTEIMG
+        docker tag ${1:-crac-lambda-restore} $REMOTEIMG
         docker push $REMOTEIMG
 
         local digest=$(docker inspect -f '{{ index .RepoDigests 0 }}' $REMOTEIMG)
@@ -156,10 +160,9 @@ s08_invoke_aws() {
 }
 
 make_cold_aws() {
-	local mem=$(aws lambda get-function-configuration --function-name $LAMBDA_NAME | jq -r '.MemorySize')
-	local min=256
-	local max=512
-	aws lambda update-function-configuration --function-name $LAMBDA_NAME --memory-size $(($min + (($mem + 1) % ($max - $min))))
+	aws lambda update-function-configuration --function-name $LAMBDA_NAME --memory-size 511
+	aws lambda wait function-updated --function-name $LAMBDA_NAME
+	aws lambda update-function-configuration --function-name $LAMBDA_NAME --memory-size 512
 	aws lambda wait function-updated --function-name $LAMBDA_NAME
 }
 
@@ -167,6 +170,10 @@ steps() {
 	for i; do
 		$i || break
 	done
+}
+
+okify() {
+	"$@" || true
 }
 
 "$@"

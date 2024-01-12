@@ -1,41 +1,22 @@
-FROM ubuntu:18.04 as builder
-
-RUN apt update && \
-	DEBIAN_FRONTEND=noninteractive apt -y --no-install-recommends install liblz4-tool && \
-	apt clean && \
-	rm -rf /var/lib/apt /var/cache/apt
-
-COPY jdk /jdk
-
-RUN LIBJVM=/jdk/lib/server/libjvm.so; \
-	       lz4 -f -z -9 $LIBJVM $LIBJVM.lz4; \
-	       rm -f $LIBJVM; \
-	       ln -s /tmp/sub/$LIBJVM $LIBJVM
-
-
 FROM ubuntu:18.04
 
-RUN apt update && \
-	DEBIAN_FRONTEND=noninteractive apt -y --no-install-recommends install liblz4-tool && \
-	apt clean && \
-	rm -rf /var/lib/apt /var/cache/apt
-
-COPY --from=builder /jdk /jdk
-COPY prepare-jdk.cmd.sh /
+COPY jdk /jdk
 
 # Copy function code and runtime dependencies from Maven layout
 COPY target/classes /function
 COPY target/dependency/* /function/lib/
 
-RUN /prepare-jdk.cmd.sh ; \
-	cd /function/lib; /jdk/bin/jar -x -f aws-lambda-java-runtime-interface-client*.jar \
-		aws-lambda-runtime-interface-client.musl.so \
-		aws-lambda-runtime-interface-client.glibc.so
+RUN cd /function/lib; /jdk/bin/jar -x -f aws-lambda-java-runtime-interface-client*.jar \
+	jni/libaws-lambda-jni.linux_musl-x86_64.so \
+	jni/libaws-lambda-jni.linux-x86_64.so \
+	jni/libaws-lambda-jni.linux-aarch_64.so \
+	jni/libaws-lambda-jni.linux_musl-aarch_64.so
 
 WORKDIR /function
 
 ENV AWS_XRAY_CONTEXT_MISSING=LOG_ERROR
 
+COPY TryLoad.java /usr/local/lib/
 COPY checkpoint.cmd.sh /
 ENTRYPOINT [ "/bin/bash", "/checkpoint.cmd.sh" ]
 

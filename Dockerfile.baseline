@@ -13,6 +13,7 @@ ENV AWS_XRAY_CONTEXT_MISSING=LOG_ERROR
 ENTRYPOINT [ "/jdk/bin/java", \
 	"-XX:-UsePerfData", \
 	"-cp", "/function:/function/lib/*", \
+	"--add-opens", "java.base/java.util=ALL-UNNAMED", \
 	"com.amazonaws.services.lambda.runtime.api.client.AWSLambda" ]
 
 # Set the CMD to your handler (could also be done as a parameter override outside of the Dockerfile)

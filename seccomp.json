@@ -1278,26 +1278,6 @@
 			"args": []
 		},
 		{
-			"name": "shmat",
-			"action": "SCMP_ACT_ALLOW",
-			"args": []
-		},
-		{
-			"name": "shmctl",
-			"action": "SCMP_ACT_ALLOW",
-			"args": []
-		},
-		{
-			"name": "shmdt",
-			"action": "SCMP_ACT_ALLOW",
-			"args": []
-		},
-		{
-			"name": "shmget",
-			"action": "SCMP_ACT_ALLOW",
-			"args": []
-		},
-		{
 			"name": "shutdown",
 			"action": "SCMP_ACT_ALLOW",
 			"args": []
