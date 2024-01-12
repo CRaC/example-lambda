@@ -40,9 +40,11 @@ s01_build() {
 
 s02_start_checkpoint() {
 	docker run \
+		--ulimit nofile=1024 \
 		--privileged \
 		--rm \
 		--name crac-checkpoint \
+		-m 512m \
 		-v $PWD/aws-lambda-rie:/aws-lambda-rie \
 		-v $PWD/cr:/cr \
 		-p 8080:8080 \
@@ -101,7 +103,7 @@ s05_local_restore() {
 }
 
 local_baseline() {
-	local_test crac-lambda-checkpoint \
+	local_test ${1:-crac-lambda-checkpoint} \
 		/aws-lambda-rie /jdk/bin/java \
 			-XX:-UsePerfData \
 			-cp /function:/function/lib/* \
@@ -132,7 +134,7 @@ s06_init_aws() {
 }
 
 s07_deploy_aws() {
-        docker tag crac-lambda-restore $REMOTEIMG
+        docker tag ${1:-crac-lambda-restore} $REMOTEIMG
         docker push $REMOTEIMG
 
         local digest=$(docker inspect -f '{{ index .RepoDigests 0 }}' $REMOTEIMG)
@@ -156,10 +158,9 @@ s08_invoke_aws() {
 }
 
 make_cold_aws() {
-	local mem=$(aws lambda get-function-configuration --function-name $LAMBDA_NAME | jq -r '.MemorySize')
-	local min=256
-	local max=512
-	aws lambda update-function-configuration --function-name $LAMBDA_NAME --memory-size $(($min + (($mem + 1) % ($max - $min))))
+	aws lambda update-function-configuration --function-name $LAMBDA_NAME --memory-size 511
+	aws lambda wait function-updated --function-name $LAMBDA_NAME
+	aws lambda update-function-configuration --function-name $LAMBDA_NAME --memory-size 512
 	aws lambda wait function-updated --function-name $LAMBDA_NAME
 }
 
@@ -167,6 +168,10 @@ steps() {
 	for i; do
 		$i || break
 	done
+}
+
+okify() {
+	"$@" || true
 }
 
 "$@"
