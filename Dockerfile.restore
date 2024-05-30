@@ -1,19 +1,5 @@
-FROM ubuntu:18.04 as builder
-
-RUN apt update && \
-	DEBIAN_FRONTEND=noninteractive apt -y --no-install-recommends install liblz4-tool && \
-	apt clean && \
-	rm -rf /var/lib/apt /var/cache/apt
-
-COPY cr /cr
-RUN tar -c /cr | lz4 -z -9 - /cr.tar.lz4
-
 FROM crac-lambda-checkpoint
 
-COPY --from=builder /cr.tar.lz4 /
+COPY cr /cr
 
-ADD restore.cmd.sh /
-ENTRYPOINT [ "/bin/bash", "/restore.cmd.sh" ]
-
-# Set the CMD to your handler (could also be done as a parameter override outside of the Dockerfile)
-CMD [ "example.Handler::handleRequest" ]
+ENTRYPOINT [ "/jdk/bin/java", "-XX:CRaCRestoreFrom=/cr" ]
