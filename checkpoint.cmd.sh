@@ -5,7 +5,8 @@ detect_native_client() {
 }
 
 export AWS_NATIVE_CLIENT=$(detect_native_client /function/lib/jni/libaws-lambda-jni.*.so)
-export CRAC_CRIU_OPTS="--compress"
+# Don't create dump4.log
+export CRAC_CRIU_OPTS="--compress -o -"
 
 # Ensure small PID, for privileged-less criu to be able to restore PID by bumping.
 # But not too small, to avoid clashes with other occasional processes on restore.
