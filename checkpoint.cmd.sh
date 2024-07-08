@@ -10,10 +10,13 @@ export CRAC_CRIU_OPTS="--compress -o -"
 
 # Ensure small PID, for privileged-less criu to be able to restore PID by bumping.
 # But not too small, to avoid clashes with other occasional processes on restore.
+# Experimentally -XX:CPUFeatures=0x21801fdbbd7,0x3e6 would work but to be on the safe
+# side in this example we'll go with generic
 exec /aws-lambda-rie /jdk/bin/java \
 		-Xshare:off \
 		-XX:-UsePerfData \
 		-XX:CRaCMinPid=128 \
+		-XX:CPUFeatures=generic \
 		-XX:CRaCCheckpointTo=/cr \
 		-cp /function:/function/lib/* \
 		-Dcom.amazonaws.services.lambda.runtime.api.client.runtimeapi.NativeClient.JNI=$AWS_NATIVE_CLIENT \
