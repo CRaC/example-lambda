@@ -75,7 +75,6 @@ s03_checkpoint() {
 }
 
 s04_prepare_restore() {
-	sudo rm -f cr/dump4.log # XXX
 	docker build -t crac-lambda-restore -f Dockerfile.restore .
 }
 
@@ -155,7 +154,7 @@ s08_invoke_aws() {
 		response.json \
 		> log.json
 
-	jq . < response.json 
+	jq . < response.json
 	jq -r .LogResult < log.json | base64 -d
 }
 
